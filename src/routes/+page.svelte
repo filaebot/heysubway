@@ -104,11 +104,11 @@
 		}
 		// First pass: bucket visible (already ETA-sorted) trains by station,
 		// then cap each station to its next MAX_TRAINS_PER_STATION.
-		// Per Dan: "show the next six trains per station" — applied across
-		// directions, not within each. So if 5 of the next 6 are northbound
-		// and 1 is southbound, that's what the user sees, mirroring the real
-		// arrival sequence at the platform.
-		const MAX_TRAINS_PER_STATION = 6;
+		// Per Dan: "next five trains per stop" — applied across directions,
+		// not within each. So if 4 of the next 5 are northbound and 1 is
+		// southbound, that's what the user sees, mirroring the real arrival
+		// sequence at the platform.
+		const MAX_TRAINS_PER_STATION = 5;
 		const trainsByStop = new Map<string, LiveTrain[]>();
 		for (const t of visible) {
 			if (!byStop.has(t.stationId)) continue;
