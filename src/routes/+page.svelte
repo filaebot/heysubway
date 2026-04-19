@@ -102,43 +102,53 @@
 				directions: []
 			});
 		}
-		// Group by (station, direction, terminus). In a complex like 4 Av-9 St
-		// both F (→ Coney) and R (→ Bay Ridge) are southbound, but they go to
-		// different places — grouping by direction alone would collapse them
-		// under one header with a misleading terminus label. Keying by
-		// terminus too gives each destination its own section.
-		const dirKey = (stopId: string, dir: 'N' | 'S', terminus: string) =>
-			`${stopId}:${dir}:${terminus}`;
-		const dirMap = new Map<string, DirectionGroup>();
+		// First pass: bucket visible (already ETA-sorted) trains by station,
+		// then cap each station to its next MAX_TRAINS_PER_STATION.
+		// Per Dan: "show the next six trains per station" — applied across
+		// directions, not within each. So if 5 of the next 6 are northbound
+		// and 1 is southbound, that's what the user sees, mirroring the real
+		// arrival sequence at the platform.
+		const MAX_TRAINS_PER_STATION = 6;
+		const trainsByStop = new Map<string, LiveTrain[]>();
 		for (const t of visible) {
-			const group = byStop.get(t.stationId);
-			if (!group) continue;
-			const k = dirKey(t.stationId, t.direction, t.terminus);
-			let dg = dirMap.get(k);
-			if (!dg) {
-				dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
-				dirMap.set(k, dg);
-				group.directions.push(dg);
+			if (!byStop.has(t.stationId)) continue;
+			const arr = trainsByStop.get(t.stationId) ?? [];
+			if (arr.length < MAX_TRAINS_PER_STATION) {
+				arr.push(t);
+				trainsByStop.set(t.stationId, arr);
 			}
-			dg.trains.push(t);
+		}
+		// Second pass: group each station's capped train list by
+		// (direction, terminus). In a complex like 4 Av-9 St both F (→ Coney)
+		// and R (→ Bay Ridge) are southbound, but they go to different places
+		// — grouping by direction alone would collapse them under one header
+		// with a misleading terminus label.
+		const dirKey = (dir: 'N' | 'S', terminus: string) => `${dir}:${terminus}`;
+		for (const [stopId, trains] of trainsByStop) {
+			const group = byStop.get(stopId)!;
+			const dirMap = new Map<string, DirectionGroup>();
+			for (const t of trains) {
+				const k = dirKey(t.direction, t.terminus);
+				let dg = dirMap.get(k);
+				if (!dg) {
+					dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
+					dirMap.set(k, dg);
+					group.directions.push(dg);
+				}
+				dg.trains.push(t);
+			}
 		}
 		// Order directions: N above S, then alphabetical by terminus within
 		// direction so the same destinations stay in the same slot across
 		// refreshes. Sort stations by walk distance (closest first).
-		// Cap each direction to the next MAX_TRAINS_PER_DIRECTION. Beyond six
-		// upcoming trains per direction the view turns into a wall of ETAs
-		// nobody plans around — the next few are the actionable window.
-		const MAX_TRAINS_PER_DIRECTION = 6;
 		return Array.from(byStop.values())
 			.sort((a, b) => a.walkSec - b.walkSec)
 			.map((g) => ({
 				...g,
-				directions: g.directions
-					.sort((a, b) => {
-						if (a.direction !== b.direction) return a.direction.localeCompare(b.direction);
-						return a.terminus.localeCompare(b.terminus);
-					})
-					.map((d) => ({ ...d, trains: d.trains.slice(0, MAX_TRAINS_PER_DIRECTION) }))
+				directions: g.directions.sort((a, b) => {
+					if (a.direction !== b.direction) return a.direction.localeCompare(b.direction);
+					return a.terminus.localeCompare(b.terminus);
+				})
 			}));
 	});
 
