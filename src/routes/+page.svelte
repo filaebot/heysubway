@@ -462,8 +462,12 @@
 	}
 	.train {
 		display: grid;
-		/* bullet | terminus (flex) | eta (fixed) | leaveby (fixed) */
-		grid-template-columns: 2.5rem 1fr 6rem auto;
+		/* bullet | terminus (flex) | eta (fixed) | leaveby (fixed)
+		   ETA and leaveby are BOTH fixed-width so numbers and labels
+		   stay vertically aligned across rows. Previously leaveby was
+		   auto-sized → "LEAVE IN 12 MIN" pushed wider than "TOO LATE",
+		   and the ETA slot's right edge wasn't fixed either. */
+		grid-template-columns: 2.5rem 1fr 6rem 10rem;
 		align-items: center;
 		gap: 1rem;
 		padding: 0.65rem 0;
@@ -509,6 +513,12 @@
 		color: #f7a600;
 		line-height: 1;
 		letter-spacing: 0.01em;
+		/* Right-align within a fixed-width slot so the MIN unit always
+		   starts at the same horizontal position regardless of whether
+		   the value is "<1", "5", or "15". Without this, numerals hug
+		   the left edge of the grid cell and MIN drifts row to row. */
+		min-width: 2.2ch;
+		text-align: right;
 	}
 	.eta-unit {
 		font-size: 0.85rem;
@@ -680,7 +690,7 @@
 			align-items: flex-start;
 		}
 		.train {
-			grid-template-columns: 2.25rem 1fr 4.5rem auto;
+			grid-template-columns: 2.25rem 1fr 4.5rem 6.5rem;
 			gap: 0.6rem;
 		}
 		.train-terminus {
