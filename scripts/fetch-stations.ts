@@ -291,11 +291,16 @@ async function main() {
 
 	const terminusOut: Record<string, { N: string; S: string }> = {};
 	const boroughOut: Record<string, { N: string; S: string }> = {};
+	const resolveBorough = (name: string, coords: { lat: number; lon: number } | undefined, fallback: string) => {
+		if (name in TERMINUS_BOROUGH) return TERMINUS_BOROUGH[name];
+		if (coords) return boroughFromLatLon(coords.lat, coords.lon);
+		return fallback;
+	};
 	for (const [routeId, term] of terminusByRoute) {
 		terminusOut[routeId] = { N: term.N, S: term.S };
 		boroughOut[routeId] = {
-			N: term.N_coords ? boroughFromLatLon(term.N_coords.lat, term.N_coords.lon) : 'Manhattan',
-			S: term.S_coords ? boroughFromLatLon(term.S_coords.lat, term.S_coords.lon) : 'Brooklyn'
+			N: resolveBorough(term.N, term.N_coords, 'Manhattan'),
+			S: resolveBorough(term.S, term.S_coords, 'Brooklyn')
 		};
 	}
 

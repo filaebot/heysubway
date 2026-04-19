@@ -179,7 +179,7 @@ export const ROUTE_BOROUGH: Record<string, { N: string; S: string }> = {
 	},
 	"4": {
 		"N": "Bronx",
-		"S": "Brooklyn"
+		"S": "Queens"
 	},
 	"5": {
 		"N": "Bronx",
@@ -230,7 +230,7 @@ export const ROUTE_BOROUGH: Record<string, { N: string; S: string }> = {
 		"S": "Brooklyn"
 	},
 	"G": {
-		"N": "Manhattan",
+		"N": "Queens",
 		"S": "Brooklyn"
 	},
 	"H": {
@@ -243,14 +243,14 @@ export const ROUTE_BOROUGH: Record<string, { N: string; S: string }> = {
 	},
 	"M": {
 		"N": "Manhattan",
-		"S": "Brooklyn"
+		"S": "Queens"
 	},
 	"N": {
-		"N": "Brooklyn",
+		"N": "Queens",
 		"S": "Brooklyn"
 	},
 	"W": {
-		"N": "Brooklyn",
+		"N": "Queens",
 		"S": "Manhattan"
 	},
 	"Q": {
