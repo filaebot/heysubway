@@ -217,7 +217,7 @@
 				<p class="no-trains">No inbound trains right now.</p>
 			{/if}
 
-			{#each s.directions as d (d.direction)}
+			{#each s.directions as d (d.direction + ':' + d.terminus)}
 				<div class="direction">
 					<div class="direction-head">
 						<span class="direction-borough">{d.borough.toUpperCase()}</span>
