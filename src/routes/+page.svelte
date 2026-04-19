@@ -77,8 +77,6 @@
 
 	interface DirectionGroup {
 		direction: 'N' | 'S';
-		borough: string;
-		terminus: string;
 		trains: LiveTrain[];
 	}
 	interface StationGroup {
@@ -103,38 +101,41 @@
 			});
 		}
 		// Bucket visible (already ETA-sorted) trains by (station, direction)
-		// and cap each bucket to MAX_TRAINS_PER_DIRECTION. Per Dan: "five
-		// trains per station per direction" — N and S sides of a platform
-		// are two separate queues, user only cares about the next few in
-		// each direction.
+		// — NOT by terminus. Per Dan: "merge same station same direction,
+		// just the soonest 5." Multiple termini in one direction (F→Jamaica,
+		// F→Church Av, G→Court Sq, R→Forest Hills) collapse into one
+		// northbound queue; per-train row carries its own terminus label.
+		// Cap at 5 soonest per (station, direction).
 		const MAX_TRAINS_PER_DIRECTION = 5;
-		const dirKey = (dir: 'N' | 'S', terminus: string) => `${dir}:${terminus}`;
 		for (const t of visible) {
 			if (!byStop.has(t.stationId)) continue;
 			const group = byStop.get(t.stationId)!;
-			const k = dirKey(t.direction, t.terminus);
-			let dg = group.directions.find((d) => dirKey(d.direction, d.terminus) === k);
+			let dg = group.directions.find((d) => d.direction === t.direction);
 			if (!dg) {
-				dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
+				dg = { direction: t.direction, trains: [] };
 				group.directions.push(dg);
 			}
 			if (dg.trains.length < MAX_TRAINS_PER_DIRECTION) {
 				dg.trains.push(t);
 			}
 		}
-		// Order directions: N above S, then alphabetical by terminus within
-		// direction so the same destinations stay in the same slot across
-		// refreshes. Sort stations by walk distance (closest first).
+		// Order directions: N above S. Sort stations by walk distance
+		// (closest first).
 		return Array.from(byStop.values())
 			.sort((a, b) => a.walkSec - b.walkSec)
 			.map((g) => ({
 				...g,
-				directions: g.directions.sort((a, b) => {
-					if (a.direction !== b.direction) return a.direction.localeCompare(b.direction);
-					return a.terminus.localeCompare(b.terminus);
-				})
+				directions: g.directions.sort((a, b) => a.direction.localeCompare(b.direction))
 			}));
 	});
+
+	// Direction label: MTA platform signage says "UPTOWN & THE BRONX" or
+	// "BROOKLYN-BOUND" at the top of each platform. We don't have a fixed
+	// geographic direction that applies across all lines at a complex, so
+	// use the simplest honest form: NORTHBOUND / SOUTHBOUND.
+	function directionLabel(dir: 'N' | 'S'): string {
+		return dir === 'N' ? 'NORTHBOUND' : 'SOUTHBOUND';
+	}
 
 	function walkMin(sec: number): string {
 		return `${Math.max(1, Math.round(sec / 60))} MIN`;
@@ -217,17 +218,20 @@
 				<p class="no-trains">No inbound trains right now.</p>
 			{/if}
 
-			{#each s.directions as d (d.direction + ':' + d.terminus)}
+			{#each s.directions as d (d.direction)}
 				<div class="direction">
 					<div class="direction-head">
-						<span class="direction-borough">{d.borough.toUpperCase()}</span>
-						<span class="direction-sep">·</span>
-						<span class="direction-terminus">{d.terminus.toUpperCase()}-BOUND</span>
+						<span class="direction-borough">{directionLabel(d.direction)}</span>
 					</div>
 					<ul class="trains">
 						{#each d.trains as t (t.tripId + t.stationId + t.direction)}
 							<li class="train" class:train--missable={t.live.missable} class:train--leaveNow={!t.live.missable && t.live.leaveBySec < 60}>
 								<span class={bulletClass(t.line)}>{t.line}</span>
+								<!-- Terminus per-row — when multiple termini merge into
+								     one direction queue (F→Jamaica vs F→Church Av vs
+								     R→Forest Hills), the user still needs to know where
+								     each individual train is actually headed. -->
+								<div class="train-terminus">{t.terminus.toUpperCase()}</div>
 								<div class="eta">
 									<span class="eta-val">{minutesLabel(t.live.etaSec)}</span>
 									<span class="eta-unit">MIN</span>
@@ -426,11 +430,25 @@
 	}
 	.train {
 		display: grid;
-		grid-template-columns: 2.5rem 6rem 1fr;
+		/* bullet | terminus (flex) | eta (fixed) | leaveby (fixed) */
+		grid-template-columns: 2.5rem 1fr 6rem auto;
 		align-items: center;
 		gap: 1rem;
 		padding: 0.65rem 0;
 		border-top: 1px solid #1a1a1a;
+	}
+	.train-terminus {
+		/* Quieter than the bullet (hero) and ETA (amber countdown). Reads
+		   as the contextual "where's this train going" label on a real
+		   platform sign: white, medium weight, tracked. */
+		font-size: 0.85rem;
+		font-weight: 500;
+		letter-spacing: 0.12em;
+		color: #ccc;
+		text-transform: uppercase;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.train:first-child {
 		border-top: none;
@@ -618,8 +636,12 @@
 			align-items: flex-start;
 		}
 		.train {
-			grid-template-columns: 2.25rem 5rem 1fr;
-			gap: 0.75rem;
+			grid-template-columns: 2.25rem 1fr 4.5rem auto;
+			gap: 0.6rem;
+		}
+		.train-terminus {
+			font-size: 0.7rem;
+			letter-spacing: 0.08em;
 		}
 		.eta-val {
 			font-size: 1.6rem;
