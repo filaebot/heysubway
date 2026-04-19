@@ -33,14 +33,27 @@
 		if (clock) clearInterval(clock);
 	});
 
+	// Hustle factor: how much faster we can move if we really book it.
+	// 1.4x normal walk = ~brisk jog (≈6.3 km/h vs 4.5 km/h walk). Cuts
+	// walk time by ~28%. Anything tighter and "hustle" stops feeling
+	// honest — it'd be sprint territory.
+	const HUSTLE_FACTOR = 1.4;
+
 	// Re-derive ETAs client-side each second using snapshot-age offset so
 	// minutes count down smoothly between polls.
 	function liveEta(t: InboundTrain) {
-		if (!state) return { etaSec: t.etaSec, leaveBySec: t.leaveBySec, missable: t.missable };
+		if (!state)
+			return { etaSec: t.etaSec, leaveBySec: t.leaveBySec, missable: t.missable, hustleable: false };
 		const driftSec = (nowMs - state.updatedAt) / 1000;
 		const etaSec = t.etaSec - driftSec;
 		const leaveBySec = etaSec - t.walkSec;
-		return { etaSec, leaveBySec, missable: leaveBySec < 0 };
+		const missable = leaveBySec < 0;
+		// Hustleable = can't make it at normal walk, BUT could make it
+		// hustling. Lower bound: leaveBySec must be within HUSTLE_FACTOR
+		// of zero on the right (negative) side.
+		const hustleBySec = etaSec - t.walkSec / HUSTLE_FACTOR;
+		const hustleable = missable && hustleBySec >= 0;
+		return { etaSec, leaveBySec, missable, hustleable };
 	}
 
 	// Countdown-clock style: round down to whole minutes, show "<1 min" for
@@ -51,11 +64,14 @@
 	}
 
 	// Leave-by label: how much slack you have before you need to leave to
-	// walk to the station in time.
-	function leaveByLabel(leaveBySec: number): string {
-		if (leaveBySec < 0) return 'TOO LATE';
-		if (leaveBySec < 60) return 'LEAVE NOW';
-		return `LEAVE IN ${Math.floor(leaveBySec / 60)} MIN`;
+	// walk to the station in time. HUSTLE intercepts BEFORE the missable
+	// branch — a hustleable train is technically "too late at walk pace"
+	// but the recommendation is "you can still make it if you move."
+	function leaveByLabel(live: { leaveBySec: number; hustleable: boolean }): string {
+		if (live.hustleable) return 'HUSTLE';
+		if (live.leaveBySec < 0) return 'TOO LATE';
+		if (live.leaveBySec < 60) return 'LEAVE NOW';
+		return `LEAVE IN ${Math.floor(live.leaveBySec / 60)} MIN`;
 	}
 
 	// Route bullet classes correspond to MTA official color groupings.
@@ -119,7 +135,10 @@
 				dg = { direction: t.direction, trains: [] };
 				group.directions.push(dg);
 			}
-			const hasCatchable = dg.trains.some((x) => !x.live.missable);
+			// "Catchable" for the extension rule = walk-catchable OR hustle-
+			// catchable. If you can hustle to make a train, the user has a
+			// real option and we shouldn't keep extending the list.
+			const hasCatchable = dg.trains.some((x) => !x.live.missable || x.live.hustleable);
 			const underMin = dg.trains.length < MIN_TRAINS_PER_DIRECTION;
 			const extendingForCatch = !hasCatchable && dg.trains.length < MAX_TRAINS_PER_DIRECTION;
 			if (underMin || extendingForCatch) {
@@ -232,7 +251,12 @@
 					</div>
 					<ul class="trains">
 						{#each d.trains as t (t.tripId + t.stationId + t.direction)}
-							<li class="train" class:train--missable={t.live.missable} class:train--leaveNow={!t.live.missable && t.live.leaveBySec < 60}>
+							<li
+								class="train"
+								class:train--missable={t.live.missable && !t.live.hustleable}
+								class:train--hustle={t.live.hustleable}
+								class:train--leaveNow={!t.live.missable && t.live.leaveBySec < 60}
+							>
 								<span class={bulletClass(t.line)}>{t.line}</span>
 								<!-- Terminus per-row — when multiple termini merge into
 								     one direction queue (F→Jamaica vs F→Church Av vs
@@ -245,10 +269,11 @@
 								</div>
 								<div
 									class="leaveby"
-									class:leaveby--missable={t.live.missable}
+									class:leaveby--missable={t.live.missable && !t.live.hustleable}
+									class:leaveby--hustle={t.live.hustleable}
 									class:leaveby--urgent={!t.live.missable && t.live.leaveBySec < 60}
 								>
-									<div class="leaveby-val">{leaveByLabel(t.live.leaveBySec)}</div>
+									<div class="leaveby-val">{leaveByLabel(t.live)}</div>
 									<!-- Per-train walk time. In a transfer complex (4 Av-9 St)
 									     different lines live on different platforms with
 									     different walk times — surfacing it per row lets the
@@ -463,6 +488,12 @@
 	.train--missable {
 		opacity: 0.45;
 	}
+	/* Hustle row — full opacity (it's a real option), but the leaveby
+	   text below picks up an urgent orange so the row reads as "act
+	   now if you want it." */
+	.train--hustle {
+		opacity: 1;
+	}
 
 	/* Countdown-clock ETA. The big numeral + small MIN unit is the
 	   standard format on NYCT platform displays. Amber on black. */
@@ -514,6 +545,12 @@
 	}
 	.leaveby--missable .leaveby-val {
 		color: #ee352e;
+	}
+	/* HUSTLE — IND orange (#ff6319), the F/B/D/M bullet color. Sits
+	   between amber LEAVE NOW and red TOO LATE in the urgency stack:
+	   "you can still make it but you have to move." */
+	.leaveby--hustle .leaveby-val {
+		color: #ff6319;
 	}
 
 	.empty {
