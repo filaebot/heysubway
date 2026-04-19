@@ -102,39 +102,23 @@
 				directions: []
 			});
 		}
-		// First pass: bucket visible (already ETA-sorted) trains by station,
-		// then cap each station to its next MAX_TRAINS_PER_STATION.
-		// Per Dan: "next five trains per stop" — applied across directions,
-		// not within each. So if 4 of the next 5 are northbound and 1 is
-		// southbound, that's what the user sees, mirroring the real arrival
-		// sequence at the platform.
-		const MAX_TRAINS_PER_STATION = 5;
-		const trainsByStop = new Map<string, LiveTrain[]>();
+		// Bucket visible (already ETA-sorted) trains by (station, direction)
+		// and cap each bucket to MAX_TRAINS_PER_DIRECTION. Per Dan: "five
+		// trains per station per direction" — N and S sides of a platform
+		// are two separate queues, user only cares about the next few in
+		// each direction.
+		const MAX_TRAINS_PER_DIRECTION = 5;
+		const dirKey = (dir: 'N' | 'S', terminus: string) => `${dir}:${terminus}`;
 		for (const t of visible) {
 			if (!byStop.has(t.stationId)) continue;
-			const arr = trainsByStop.get(t.stationId) ?? [];
-			if (arr.length < MAX_TRAINS_PER_STATION) {
-				arr.push(t);
-				trainsByStop.set(t.stationId, arr);
+			const group = byStop.get(t.stationId)!;
+			const k = dirKey(t.direction, t.terminus);
+			let dg = group.directions.find((d) => dirKey(d.direction, d.terminus) === k);
+			if (!dg) {
+				dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
+				group.directions.push(dg);
 			}
-		}
-		// Second pass: group each station's capped train list by
-		// (direction, terminus). In a complex like 4 Av-9 St both F (→ Coney)
-		// and R (→ Bay Ridge) are southbound, but they go to different places
-		// — grouping by direction alone would collapse them under one header
-		// with a misleading terminus label.
-		const dirKey = (dir: 'N' | 'S', terminus: string) => `${dir}:${terminus}`;
-		for (const [stopId, trains] of trainsByStop) {
-			const group = byStop.get(stopId)!;
-			const dirMap = new Map<string, DirectionGroup>();
-			for (const t of trains) {
-				const k = dirKey(t.direction, t.terminus);
-				let dg = dirMap.get(k);
-				if (!dg) {
-					dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
-					dirMap.set(k, dg);
-					group.directions.push(dg);
-				}
+			if (dg.trains.length < MAX_TRAINS_PER_DIRECTION) {
 				dg.trains.push(t);
 			}
 		}
