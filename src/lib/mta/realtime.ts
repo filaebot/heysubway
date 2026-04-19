@@ -9,15 +9,18 @@ import { NEARBY_STATIONS, ROUTE_TERMINUS, ROUTE_BOROUGH } from './stations';
 
 const { transit_realtime } = GtfsRealtimeBindings;
 
-// Build a stopId → Station lookup including both parent + platform-level ids.
-// MTA realtime trip updates reference platform-level stop_ids (e.g. "G34N"),
-// but we expose parents ("G34") in Station. The platform id's trailing
-// N/S indicates direction, which we preserve.
+// Build a stopId → Station lookup including every platform-level id that
+// rolls up into a station (a station can be a complex of multiple parent
+// ids — 4 Av-9 St is R33 + F23). MTA realtime trip updates reference
+// platform-level stop_ids (e.g. "G34N"); the trailing N/S is direction.
 function buildStopIdIndex(stations: Station[]): Map<string, { station: Station; direction: DirectionCode }> {
 	const idx = new Map<string, { station: Station; direction: DirectionCode }>();
 	for (const s of stations) {
-		idx.set(`${s.stopId}N`, { station: s, direction: 'N' });
-		idx.set(`${s.stopId}S`, { station: s, direction: 'S' });
+		const parents = s.stopIds ?? [s.stopId];
+		for (const p of parents) {
+			idx.set(`${p}N`, { station: s, direction: 'N' });
+			idx.set(`${p}S`, { station: s, direction: 'S' });
+		}
 	}
 	return idx;
 }
@@ -102,8 +105,20 @@ export async function pollAllFeeds(stations: Station[] = NEARBY_STATIONS): Promi
 				// Filter out trains that have already arrived/departed.
 				if (etaSec < -DEPARTED_GRACE_SEC) continue;
 
+				// Route whitelist — `lines` is the authoritative list of routes
+				// that serve this station in regular operation. Realtime feeds
+				// occasionally carry trips for routes that only use the platform
+				// during G.O. diversions (e.g. late-night D at BMT 9 St).
+				// Filtering here keeps the UI honest about what a commuter can
+				// actually expect to board.
+				if (!match.station.lines.includes(route)) continue;
+
 				const { terminus, borough, label } = directionLabel(route, match.direction);
-				const walkSec = match.station.walkSeconds;
+				// Per-route walk time — in a complex like 4 Av-9 St, the BMT R
+				// platform is ~6 min walk, the IND F/G platform is ~11 min walk.
+				// Falls back to station-level walkSeconds when route-specific
+				// override not set.
+				const walkSec = match.station.walkByRoute?.[route] ?? match.station.walkSeconds;
 				const leaveBy = etaSec - walkSec;
 
 				inbound.push({

@@ -1,14 +1,30 @@
 // MTA GTFS static — a physical station (parent_station row in stops.txt)
-// or a platform-level stop (parent_station blank).
+// or a physical complex composed of multiple parent stations that share a
+// street address and transfer (e.g. 4 Av-9 St, where R33 BMT + F23 IND
+// share a name but live on different platforms with different walk times).
 export interface Station {
-	stopId: string; // e.g. "G34" (parent) or "G34N"/"G34S" (platform)
+	stopId: string; // primary parent id used for display + keying (e.g. "R33")
+	// Platform-level parent ids that roll up into this station. Defaults to
+	// [stopId] when not set. For a single-parent station, equivalent to
+	// just stopId. For a complex, lists every parent that feeds in.
+	stopIds?: string[];
 	name: string;
 	lat: number;
 	lon: number;
-	distanceMeters: number; // from USER_LOCATION
-	walkSeconds: number; // haversine / WALK_SPEED_MPS
-	// Lines that serve this station (derived from routes + stop_times at build time).
+	distanceMeters: number; // closest entrance from USER_LOCATION (meters)
+	walkSeconds: number; // closest entrance walk time (seconds)
+	// Lines (route_ids) served by this station. Used for display AND as a
+	// whitelist — realtime trips with route_id not in this list are dropped
+	// even if they appear in the feed for a matching stop_id. This filters
+	// out GTFS scheduled diversions (e.g. late-night D at BMT 9 St) that
+	// don't reflect normal service.
 	lines: string[];
+	// Per-route walk-time override. Keyed by route_id. When a complex has
+	// physically separate platforms (BMT vs IND at 4 Av-9 St), the R uses
+	// one entrance and F/G use a different entrance 400m away — each
+	// line's walk time differs. Missing keys fall back to walkSeconds.
+	walkByRoute?: Record<string, number>;
+	distanceByRoute?: Record<string, number>;
 }
 
 // Direction derived from stop_id suffix: N/S (northbound/southbound), plus borough heuristic.

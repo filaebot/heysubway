@@ -102,12 +102,18 @@
 				directions: []
 			});
 		}
-		const dirKey = (stopId: string, dir: 'N' | 'S') => `${stopId}:${dir}`;
+		// Group by (station, direction, terminus). In a complex like 4 Av-9 St
+		// both F (→ Coney) and R (→ Bay Ridge) are southbound, but they go to
+		// different places — grouping by direction alone would collapse them
+		// under one header with a misleading terminus label. Keying by
+		// terminus too gives each destination its own section.
+		const dirKey = (stopId: string, dir: 'N' | 'S', terminus: string) =>
+			`${stopId}:${dir}:${terminus}`;
 		const dirMap = new Map<string, DirectionGroup>();
 		for (const t of visible) {
 			const group = byStop.get(t.stationId);
 			if (!group) continue;
-			const k = dirKey(t.stationId, t.direction);
+			const k = dirKey(t.stationId, t.direction, t.terminus);
 			let dg = dirMap.get(k);
 			if (!dg) {
 				dg = { direction: t.direction, borough: t.borough, terminus: t.terminus, trains: [] };
@@ -116,7 +122,9 @@
 			}
 			dg.trains.push(t);
 		}
-		// Order directions: N above S. Sort stations by walk distance.
+		// Order directions: N above S, then alphabetical by terminus within
+		// direction so the same destinations stay in the same slot across
+		// refreshes. Sort stations by walk distance (closest first).
 		// Cap each direction to the next MAX_TRAINS_PER_DIRECTION. Beyond six
 		// upcoming trains per direction the view turns into a wall of ETAs
 		// nobody plans around — the next few are the actionable window.
@@ -126,13 +134,28 @@
 			.map((g) => ({
 				...g,
 				directions: g.directions
-					.sort((a, b) => a.direction.localeCompare(b.direction))
+					.sort((a, b) => {
+						if (a.direction !== b.direction) return a.direction.localeCompare(b.direction);
+						return a.terminus.localeCompare(b.terminus);
+					})
 					.map((d) => ({ ...d, trains: d.trains.slice(0, MAX_TRAINS_PER_DIRECTION) }))
 			}));
 	});
 
 	function walkMin(sec: number): string {
 		return `${Math.max(1, Math.round(sec / 60))} MIN`;
+	}
+	// Walk-time range across trains in a station. In a single-platform
+	// station (7 Av) every train shares walkSec → collapses to "7 MIN". In
+	// a complex with per-line walk (4 Av-9 St) trains have different walk
+	// times → shows "6-11 MIN" so the header is honest about the spread.
+	function walkRange(g: StationGroup): string {
+		const walks = g.directions.flatMap((d) => d.trains.map((t) => t.walkSec));
+		if (walks.length === 0) return walkMin(g.walkSec);
+		const lo = Math.max(1, Math.round(Math.min(...walks) / 60));
+		const hi = Math.max(1, Math.round(Math.max(...walks) / 60));
+		if (lo === hi) return `${lo} MIN`;
+		return `${lo}–${hi} MIN`;
 	}
 	function clockTime(ms: number): string {
 		const d = new Date(ms);
@@ -191,7 +214,7 @@
 					</div>
 				</div>
 				<div class="station-walk">
-					<div class="walk-val">{walkMin(s.walkSec)}</div>
+					<div class="walk-val">{walkRange(s)}</div>
 					<div class="walk-label">WALK</div>
 				</div>
 			</header>
@@ -220,7 +243,13 @@
 									class:leaveby--missable={t.live.missable}
 									class:leaveby--urgent={!t.live.missable && t.live.leaveBySec < 60}
 								>
-									{leaveByLabel(t.live.leaveBySec)}
+									<div class="leaveby-val">{leaveByLabel(t.live.leaveBySec)}</div>
+									<!-- Per-train walk time. In a transfer complex (4 Av-9 St)
+									     different lines live on different platforms with
+									     different walk times — surfacing it per row lets the
+									     user see "R = 6 min walk, F = 11 min walk" at a glance
+									     instead of relying on the station header range. -->
+									<div class="leaveby-walk">{walkMin(t.walkSec)} WALK</div>
 								</div>
 							</li>
 						{/each}
@@ -444,11 +473,27 @@
 		font-weight: 700;
 		letter-spacing: 0.18em;
 		color: #888;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		align-items: flex-end;
 	}
-	.leaveby--urgent {
+	.leaveby-val {
+		color: inherit;
+	}
+	.leaveby-walk {
+		/* Per-train walk — always quieter than the leaveby line so it reads
+		   as meta under the primary. Doesn't take the urgent/missable
+		   color treatment; walk distance isn't time-sensitive. */
+		font-size: 0.65rem;
+		font-weight: 500;
+		letter-spacing: 0.2em;
+		color: #666;
+	}
+	.leaveby--urgent .leaveby-val {
 		color: #f7a600;
 	}
-	.leaveby--missable {
+	.leaveby--missable .leaveby-val {
 		color: #ee352e;
 	}
 
