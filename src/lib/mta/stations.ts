@@ -9,8 +9,8 @@ export const NEARBY_STATIONS: Station[] = [
 		"name": "4 Av-9 St",
 		"lat": 40.670847,
 		"lon": -73.988302,
-		"distanceMeters": 434,
-		"walkSeconds": 347,
+		"distanceMeters": 507,
+		"walkSeconds": 406,
 		"lines": [
 			"D",
 			"N",
@@ -23,8 +23,8 @@ export const NEARBY_STATIONS: Station[] = [
 		"name": "7 Av",
 		"lat": 40.666271,
 		"lon": -73.980305,
-		"distanceMeters": 440,
-		"walkSeconds": 352,
+		"distanceMeters": 568,
+		"walkSeconds": 454,
 		"lines": [
 			"F",
 			"FX",
@@ -36,8 +36,8 @@ export const NEARBY_STATIONS: Station[] = [
 		"name": "4 Av-9 St",
 		"lat": 40.670272,
 		"lon": -73.989779,
-		"distanceMeters": 536,
-		"walkSeconds": 429,
+		"distanceMeters": 854,
+		"walkSeconds": 684,
 		"lines": [
 			"F",
 			"G"

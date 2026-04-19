@@ -16,6 +16,42 @@ import {
 } from '../src/lib/constants.ts';
 import { haversineMeters, walkingSeconds } from '../src/lib/geo.ts';
 
+// OSRM public foot-routing. Returns actual street-graph walking time
+// (sidewalks, blocks, crossings) instead of great-circle × fixed speed.
+// Called once per station at build time — three API calls total, hardcoded
+// into stations.ts so there's zero runtime dependency. Falls back to
+// haversine × WALK_SPEED_MPS × 1.3 detour-factor if OSRM is unreachable.
+const OSRM_FOOT_URL = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot';
+
+async function osrmFootRoute(
+	from: { lat: number; lon: number },
+	to: { lat: number; lon: number }
+): Promise<{ durationSec: number; distanceMeters: number } | null> {
+	const url = `${OSRM_FOOT_URL}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+	try {
+		const res = await fetch(url, {
+			headers: { 'User-Agent': 'heysubway/0.1 (+https://heysubway.filae.site)' }
+		});
+		if (!res.ok) {
+			console.warn(`  [osrm] HTTP ${res.status}`);
+			return null;
+		}
+		const data = (await res.json()) as {
+			code: string;
+			routes?: Array<{ duration: number; distance: number }>;
+		};
+		if (data.code !== 'Ok' || !data.routes?.length) {
+			console.warn(`  [osrm] code=${data.code}`);
+			return null;
+		}
+		const r = data.routes[0];
+		return { durationSec: r.duration, distanceMeters: r.distance };
+	} catch (e) {
+		console.warn('  [osrm] fetch failed', e instanceof Error ? e.message : e);
+		return null;
+	}
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const CACHE_DIR = join(ROOT, 'data', 'gtfs-cache');
@@ -191,19 +227,51 @@ async function main() {
 		stopsByTrip.get(st.trip_id)!.push(st);
 	}
 
-	const stationsOut = nearby.map((s) => {
-		const walk = walkingSeconds(s.distanceMeters, WALK_SPEED_MPS);
+	// Walking time via OSRM foot routing. Great-circle × fixed-speed
+	// consistently underestimates by 15-25% in Brooklyn — Park Slope has
+	// one-way sidewalks on some blocks, avenue crossings with lights,
+	// actual street geometry vs as-the-crow-flies. Cache per station so a
+	// routing failure on any one doesn't block the build.
+	console.log('[fetch-stations] querying OSRM foot routing for each station');
+	const stationsOut = [] as Array<{
+		stopId: string;
+		name: string;
+		lat: number;
+		lon: number;
+		distanceMeters: number;
+		walkSeconds: number;
+		lines: string[];
+	}>;
+	for (const s of nearby) {
+		const routed = await osrmFootRoute(USER_LOCATION, { lat: s.lat, lon: s.lon });
+		let walk: number;
+		let dist: number;
+		if (routed) {
+			walk = routed.durationSec;
+			dist = routed.distanceMeters;
+			console.log(
+				`  ${s.stopId} ${s.name}: OSRM ${Math.round(dist)}m ${Math.round(walk)}s ` +
+					`(haversine ${Math.round(s.distanceMeters)}m)`
+			);
+		} else {
+			// Fallback: haversine × 1.3 detour-factor × WALK_SPEED_MPS. The 1.3
+			// factor is an empirical correction for grid streets vs direct line.
+			const detour = s.distanceMeters * 1.3;
+			walk = walkingSeconds(detour, WALK_SPEED_MPS);
+			dist = s.distanceMeters;
+			console.log(`  ${s.stopId} ${s.name}: OSRM failed, fallback ${Math.round(walk)}s`);
+		}
 		const lineSet = linesByParent.get(s.stopId) ?? new Set<string>();
-		return {
+		stationsOut.push({
 			stopId: s.stopId,
 			name: s.name,
 			lat: s.lat,
 			lon: s.lon,
-			distanceMeters: Math.round(s.distanceMeters),
+			distanceMeters: Math.round(dist),
 			walkSeconds: Math.round(walk),
 			lines: Array.from(lineSet).sort()
-		};
-	});
+		});
+	}
 
 	// Determine terminus per route × direction. Representative trip's last stop.
 	const parentInfo = new Map<string, { lat: number; lon: number; name: string }>();

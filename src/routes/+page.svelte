@@ -117,11 +117,17 @@
 			dg.trains.push(t);
 		}
 		// Order directions: N above S. Sort stations by walk distance.
+		// Cap each direction to the next MAX_TRAINS_PER_DIRECTION. Beyond six
+		// upcoming trains per direction the view turns into a wall of ETAs
+		// nobody plans around — the next few are the actionable window.
+		const MAX_TRAINS_PER_DIRECTION = 6;
 		return Array.from(byStop.values())
 			.sort((a, b) => a.walkSec - b.walkSec)
 			.map((g) => ({
 				...g,
-				directions: g.directions.sort((a, b) => a.direction.localeCompare(b.direction))
+				directions: g.directions
+					.sort((a, b) => a.direction.localeCompare(b.direction))
+					.map((d) => ({ ...d, trains: d.trains.slice(0, MAX_TRAINS_PER_DIRECTION) }))
 			}));
 	});
 
