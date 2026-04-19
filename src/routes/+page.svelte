@@ -101,12 +101,16 @@
 			});
 		}
 		// Bucket visible (already ETA-sorted) trains by (station, direction)
-		// — NOT by terminus. Per Dan: "merge same station same direction,
-		// just the soonest 5." Multiple termini in one direction (F→Jamaica,
-		// F→Church Av, G→Court Sq, R→Forest Hills) collapse into one
-		// northbound queue; per-train row carries its own terminus label.
-		// Cap at 5 soonest per (station, direction).
-		const MAX_TRAINS_PER_DIRECTION = 5;
+		// — NOT by terminus. Multiple termini in one direction collapse
+		// into one queue; per-train row carries its own terminus label.
+		//
+		// Sizing rule (per Dan): show the next 5 combined, BUT extend past
+		// 5 when none of those 5 are catchable given the walk time. Stop
+		// as soon as at least one catchable train is included, or at the
+		// hard cap (10) to keep the list bounded when nothing is makeable.
+		// "Catchable" = live.leaveBySec >= 0, i.e. NOT TOO LATE.
+		const MIN_TRAINS_PER_DIRECTION = 5;
+		const MAX_TRAINS_PER_DIRECTION = 10;
 		for (const t of visible) {
 			if (!byStop.has(t.stationId)) continue;
 			const group = byStop.get(t.stationId)!;
@@ -115,7 +119,10 @@
 				dg = { direction: t.direction, trains: [] };
 				group.directions.push(dg);
 			}
-			if (dg.trains.length < MAX_TRAINS_PER_DIRECTION) {
+			const hasCatchable = dg.trains.some((x) => !x.live.missable);
+			const underMin = dg.trains.length < MIN_TRAINS_PER_DIRECTION;
+			const extendingForCatch = !hasCatchable && dg.trains.length < MAX_TRAINS_PER_DIRECTION;
+			if (underMin || extendingForCatch) {
 				dg.trains.push(t);
 			}
 		}
