@@ -1,0 +1,8 @@
+node_modules
+.DS_Store
+.svelte-kit
+build
+package-lock.json
+logs/*.log
+logs/*.err
+data/gtfs-cache/
