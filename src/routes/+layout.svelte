@@ -10,6 +10,15 @@
 	     Apple platforms and Arial is the Windows/Android fallback. We lean
 	     on the OS font rather than a webfont to match the authoritative,
 	     printed-sign feel — a loaded webfont on a FOUT would feel wrong. -->
+	<meta property="og:title" content="Hey Subway" />
+	<meta property="og:description" content="Real-time NYC subway departures" />
+	<meta property="og:image" content="/og-image.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Hey Subway" />
+	<meta name="twitter:image" content="/og-image.png" />
 </svelte:head>
 
 {@render children()}
