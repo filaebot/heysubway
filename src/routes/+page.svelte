@@ -163,6 +163,11 @@
 		return dir === 'N' ? 'NORTHBOUND' : 'SOUTHBOUND';
 	}
 
+	function departTime(epochMs: number): string {
+		const d = new Date(epochMs);
+		return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+	}
+
 	function walkMin(sec: number): string {
 		return `${Math.max(1, Math.round(sec / 60))} MIN`;
 	}
@@ -262,7 +267,10 @@
 								     one direction queue (F→Jamaica vs F→Church Av vs
 								     R→Forest Hills), the user still needs to know where
 								     each individual train is actually headed. -->
-								<div class="train-terminus">{t.terminus.toUpperCase()}</div>
+								<div class="train-dest">
+									<div class="train-terminus">{t.terminus.toUpperCase()}</div>
+									<div class="train-depart">{departTime(t.departureTime)}</div>
+								</div>
 								<div class="eta">
 									<span class="eta-val">{minutesLabel(t.live.etaSec)}</span>
 									<span class="eta-unit">MIN</span>
@@ -473,6 +481,12 @@
 		padding: 0.65rem 0;
 		border-top: 1px solid #1a1a1a;
 	}
+	.train-dest {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		overflow: hidden;
+	}
 	.train-terminus {
 		/* Quieter than the bullet (hero) and ETA (amber countdown). Reads
 		   as the contextual "where's this train going" label on a real
@@ -485,6 +499,13 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.train-depart {
+		font-size: 0.65rem;
+		font-weight: 500;
+		letter-spacing: 0.15em;
+		color: #777;
+		font-variant-numeric: tabular-nums;
 	}
 	.train:first-child {
 		border-top: none;

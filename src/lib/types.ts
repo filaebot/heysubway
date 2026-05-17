@@ -39,6 +39,7 @@ export interface InboundTrain {
 	borough: string; // "Manhattan" | "Brooklyn" | "Queens" | "Bronx" | "Staten Island" | "Terminal"
 	terminus: string; // "Church Av", "Jamaica Center", etc.
 	etaSec: number; // seconds until train arrives at this stop
+	departureTime: number; // epoch ms — scheduled arrival/departure time at this stop
 	walkSec: number; // seconds to walk to the station from USER_LOCATION
 	// Derived: leaveBySec = etaSec - walkSec. Negative → too late to make it.
 	leaveBySec: number;

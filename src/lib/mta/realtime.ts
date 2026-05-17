@@ -130,6 +130,7 @@ export async function pollAllFeeds(stations: Station[] = NEARBY_STATIONS): Promi
 					borough,
 					terminus,
 					etaSec,
+					departureTime: whenSec * 1000,
 					walkSec,
 					leaveBySec: leaveBy,
 					missable: leaveBy < 0,
